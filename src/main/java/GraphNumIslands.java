@@ -10,7 +10,7 @@ public class GraphNumIslands {
 11000
 00000
          */
-        int[][] grid = {{1,1,1,1,0},{1,1,0,1,0},{1,1,0,0,0},{0,0,0,0,0}};
+        char[][] grid = {{'1','1','1','1','0'},{'1','1','0','1','0'},{'1','1','0','0','0'},{'0','0','0','0','0'}};
 
         /*
         Input for example 2
@@ -22,12 +22,14 @@ public class GraphNumIslands {
 
 Output: 3
          */
-        int[][] grid3 = {{1,1,0,0,0},{1,1,0,0,0},{0,0,1,0,0},{0,0,0,1,1}};
-//        System.out.println("numberOfIslands is :"+numberOfIslands(grid));
-        System.out.println("numberOfIslands3 is :"+numberOfIslands(grid3));
+//        int[][] grid3 = {{1,1,0,0,0},{1,1,0,0,0},{0,0,1,0,0},{0,0,0,1,1}};
+        char[][] grid3 = {{'1','1','0','0','0'},{'1','1','0','0','0'},{'0','0','1','0','0'},{'0','0','0','1','1'}};
+
+        System.out.println("\nnumberOfIslands is :"+numberOfIslands(grid));
+        System.out.println("\nnumberOfIslands3 is :"+numberOfIslands(grid3));
     }
 
-    static int numberOfIslands(int[][] grid){
+    static int numberOfIslands(char[][] grid){
         int number = 0;
 
         if(grid==null ||  grid.length <0 || grid[0].length<0 ) {
@@ -35,7 +37,7 @@ Output: 3
         }
         for (int i = 0; i < grid.length; i++) {
             for (int j = 0; j <grid[i].length ; j++) {
-                if(grid[i][j]==1) {
+                if(grid[i][j]=='1') {
                     // DFS to clear adjcent "1" to avoid dup counting
                     DFS(grid, i, j);
                     ++number;
@@ -45,16 +47,16 @@ Output: 3
         return number;
     }
 
-    static void DFS(int[][] grid, int x, int y){
+    static void DFS(char[][] grid, int x, int y){
         //edge case
-        if(grid==null || x<0 || x >= grid.length || y<0 || y>=grid[0].length || grid[x][y]==0) { //[!!!!] should >= length, not ">"
+        if(grid==null || x<0 || x >= grid.length || y<0 || y>=grid[0].length || grid[x][y]=='0') { //[!!!!] should >= length, not ">"
 //      if(grid==null || x<0 || x > grid.length || y<0 || y>grid[0].length || grid[x][y]==0) {
             // return if cursor node is NOT 1
             return;
         }
 
         // means current cursor node is "1"
-        grid[x][y]=0; // mark this cell as visied
+        grid[x][y]='0'; // mark this cell as visied
 
         // check all adjacent cells
         DFS(grid, x-1, y);
