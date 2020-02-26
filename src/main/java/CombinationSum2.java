@@ -1,12 +1,16 @@
-class CombinationSum2 {
+class Solution {
+    /*
+    [10,1,2,7,6,1,5]
+8
+    */
     public List<List<Integer>> combinationSum2(int[] candidates, int target) {
         List<List<Integer>> result = new ArrayList<>();
         Arrays.sort(candidates); // here is key to make array increasing
-        findCombination(candidates,0,target,new ArrayList<>(),result);
+        findCombination(candidates,0,target,new ArrayList<Integer>(),result);
         return result;
     }
     
-    public void findCombination(int[] candidates, int idx, int target, List<> current, List<List<>> result){
+    public void findCombination(int[] candidates, int idx, int target, List<Integer> current, List<List<Integer>> result){
         //base case
         if(target == 0){
             // found correct combination
@@ -28,7 +32,7 @@ class CombinationSum2 {
                 // for non first loop, check it with previus value
                 current.add(candidates[i]); // Not same as previous one
                 findCombination(candidates,i+1, target-candidates[i], current, result); // here will DFS try to keep on adding new element to current
-                current.remove(candidates.length-1);// when above line returned, it means last element is too big
+                current.remove(current.size()-1);// when above line returned, it means last element is too big// arraylist is "size()" not "length"
             }
         }
     }
