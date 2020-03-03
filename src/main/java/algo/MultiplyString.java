@@ -1,3 +1,5 @@
+package algo;
+
 public class MultiplyString {
     public static void main(String[] args) {
         System.out.println("MultiplyString.main");

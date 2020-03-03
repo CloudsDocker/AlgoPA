@@ -1,4 +1,10 @@
-class Solution {
+package algo;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+class CombinationSum2 {
         public static List<List<Integer>> combinationSum2(int[] candidates, int target) {
 //        List<List<Integer>> result = new ArrayList<>();
 //        Arrays.sort(candidates); // here is key to make array increasing

@@ -1,4 +1,6 @@
-class Solution {
+package algo;
+
+class longestCommonSubsequence {
     public int longestCommonSubsequence(String text1, String text2) {
         
         // xx-est is meant for dynamic programming
