@@ -1,5 +1,7 @@
 package algo;
 
+import javafx.geometry.Side;
+
 import java.time.Clock;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -49,14 +51,35 @@ public class matchingEngine {
                 List<Order> otherSideList=getOrderQueueBySide(tmpOrder,true);
 
                 Order thatOrder= otherSideList.get(0);
-                if(thatOrder==null || tmpOrder.getSize()<thatOrder.getSize()){
+                long diff=tmpOrder.getSize()-thatOrder.getSize();
+                if(thatOrder==null ){
                     // (1) no other side orders, outout no matching and add current order to current side queue
-                    // (2) current order is smaller than other side
-                    listOrders.add(thatOrder==null?Order.NON_MATCHING:tmpOrder);
+                    listOrders.add(Order.NON_MATCHING);
                     ownSideList.add(tmpOrder);
+                }else if(diff<0) {
+                    // (2) current order is smaller than other side
+                    listOrders.add(tmpOrder);
+                    thatOrder.minusSize(tmpOrder.getSize());
+                }else if(diff==0) {
+                    listOrders.add(tmpOrder);
+                    listOrders.add(thatOrder);
+                    otherSideList.remove(thatOrder);
                 }else{
                     // this.size >= thatOrder.size
                     // (3) go to loop and combine multiple orders together
+                    long leftSize=tmpOrder.getSize();
+                    while(!otherSideList.isEmpty()){
+
+//                    }
+//                    for (int i = 0; i < otherSideList.size(); i++) {
+                         thatOrder=otherSideList.get(0);
+                        if(leftSize>=thatOrder.getSize()){
+                            listOrders.add(otherSideList.get(0));
+                            otherSideList.remove(0);
+                            leftSize-=thatOrder.getSize();
+                            continue;;ssss
+                        }
+                    }
 
                     listOrders.add(tmpOrder);tttttt
                     ownSideList.add(tmpOrder);
@@ -196,6 +219,11 @@ public class matchingEngine {
 
             public void setSize(long size) {
                 this.size = size;
+            }
+
+            public long minusSize(long size){
+                this.size-=size;
+                return this.size;
             }
 
             @Override
