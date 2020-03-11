@@ -2,6 +2,7 @@ package algo;
 
 import java.time.Clock;
 import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
@@ -9,14 +10,16 @@ import static algo.matchingEngine.Side.BUY;
 import static algo.matchingEngine.Side.SELL;
 
 public class matchingEngine {
+    // Max number of orders can be queued, more new orders will be blocked until more space freed
+    final static int MAX_ORDER_DEPTH=10_000;
     final static String OUTPUT_MATCHES = "%s matches: %s";
     // pre define string constants for most frequent cases, purely for performance
     final static String OUTPUT_NO_MATCHES = "0 matches:";
 
     //TODO: replace list with blocking queue to provent system overstack
-    private Map<Product, List<Order>> buyQueue = new ConcurrentSkipListMap<Product, List<Order>>();
-    private Map<Product, List<Order>> sellQueue = new ConcurrentSkipListMap<Product, List<Order>>();
-    private Map<Side, Map<Product, List<Order>>> queueBySide = new HashMap<>();
+    private Map<Product, Queue<Order>> buyQueue = new ConcurrentSkipListMap<Product, Queue<Order>>();
+    private Map<Product, Queue<Order>> sellQueue = new ConcurrentSkipListMap<Product, Queue<Order>>();
+    private Map<Side, Map<Product, Queue<Order>>> queueBySide = new HashMap<>();
 
     public static void main(String[] args) {
         matchingEngine instance = new matchingEngine();
@@ -41,6 +44,7 @@ public class matchingEngine {
 
     }
 
+    // proxy method
     public List<String> processData(List<String> input) {
         return processData(input, true);
     }
@@ -54,14 +58,15 @@ public class matchingEngine {
         for (String order : input) {
             Order tmpOrder = new Order(order);
             if (tmpOrder.size <= 0) {
-                System.out.println("skip zero order: " + tmpOrder);
+                if(showLogs)
+                    System.out.println("[DEBUG] skip zero order: " + tmpOrder);
                 continue;
             }
 
-            List<Order> ownSideList = helperOrderQueueBySide(tmpOrder, false);
-            List<Order> otherSideList = helperOrderQueueBySide(tmpOrder, true);
+            Queue<Order> ownSideList = helperOrderQueueBySide(tmpOrder, false);
+            Queue<Order> otherSideList = helperOrderQueueBySide(tmpOrder, true);
 
-            Order thatOrder = otherSideList.size() > 0 ? otherSideList.get(0) : null;
+            Order thatOrder = otherSideList.size() > 0 ? otherSideList.peek() : null;
             long diff = tmpOrder.getSize() - (thatOrder == null ? 0 : thatOrder.getSize());
             if (thatOrder == null) {
                 // (1) no other side orders, outout no matching and add current order to current side queue
@@ -73,21 +78,21 @@ public class matchingEngine {
                 thatOrder.minusSize(tmpOrder.getSize());
             } else if (diff == 0) {
                 listOrders.add(helperFormatOutput(thatOrder, tmpOrder));
-                otherSideList.remove(thatOrder);
+                otherSideList.poll();
             } else {//TODO: to refactor this part to common method
                 // this.size >= thatOrder.size
                 // (3) go to loop and combine multiple orders together
                 List<Order> listMatchedOrders = new ArrayList<>();
                 long leftSize = tmpOrder.getSize();
                 while (!otherSideList.isEmpty()) {
-                    thatOrder = otherSideList.get(0);
+                    thatOrder = otherSideList.peek();
                     if (leftSize < thatOrder.size) {
                         listMatchedOrders.add(tmpOrder);
                         thatOrder.minusSize(leftSize);
                         break;
                     } else {
                         listMatchedOrders.add(thatOrder);
-                        otherSideList.remove(thatOrder);
+                        otherSideList.poll();
                         leftSize -= thatOrder.size;
                         tmpOrder.setSize(leftSize);
                     }
@@ -114,9 +119,9 @@ public class matchingEngine {
         return String.format(OUTPUT_MATCHES, n, String.join(",", listIDs));
     }
 
-    private List<Order> helperOrderQueueBySide(final Order order, final boolean isReversed) {
+    private Queue<Order> helperOrderQueueBySide(final Order order, final boolean isReversed) {
         //TODO: to use array of Map
-        Map<Product, List<Order>> tmpQueue;
+        Map<Product, Queue<Order>> tmpQueue;
         switch (order.side) {
             case BUY:
                 tmpQueue = isReversed ? sellQueue : buyQueue;
@@ -128,7 +133,7 @@ public class matchingEngine {
                 throw new IllegalStateException("Unexpected SIDE: " + order.side);
         }
         if (!tmpQueue.containsKey(order.product)) {
-            tmpQueue.put(order.product, new ArrayList<>());
+            tmpQueue.put(order.product, new ArrayBlockingQueue<Order>(MAX_ORDER_DEPTH, true));
         }
         return tmpQueue.get(order.product);
     }
