@@ -5,13 +5,15 @@ import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
-
 import static algo.matchingEngine.Side.BUY;
 import static algo.matchingEngine.Side.SELL;
 
 public class matchingEngine {
-    final static String OUTPUT_MATCHED = "%s matched";
-    final static String OUTPUT_NO_MATCH = "%s no matching";
+    final static String OUTPUT_MATCHES = "%s matches: %s";
+    // pre define string constants for most frequent cases, purely for performance
+    final static String OUTPUT_NO_MATCHES = "0 matches:";
+
+    //TODO: replace list with blocking queue to provent system overstack
     private Map<Product, List<Order>> buyQueue = new ConcurrentSkipListMap<Product, List<Order>>();
     private Map<Product, List<Order>> sellQueue = new ConcurrentSkipListMap<Product, List<Order>>();
     private Map<Side, Map<Product, List<Order>>> queueBySide = new HashMap<>();
@@ -19,26 +21,36 @@ public class matchingEngine {
     public static void main(String[] args) {
         matchingEngine instance = new matchingEngine();
         System.out.println(">>>>>>Starting Matching Engine=====");
-        List<String> input = new ArrayList<>();
 
         if (instance.sanityCheck()) {
-            System.out.println("[DEBUG] All sanity test Passed");
-        }else{
-            System.out.println("[ERROR] Sanity checks failure");
+            System.out.println("[DEBUG] All sanity test Passed, please enter your orders");
+        } else {
+            System.out.println("[ERROR] Sanity checks failure, please contact supprot");
         }
+
+        List<String> input = new ArrayList<>();
+        Scanner scanner = new Scanner(System.in);
+        while (scanner.hasNext()) {
+            input.add(scanner.nextLine());
+        }
+        List<String> listOut= instance.processData(input);
+        System.out.println("Output messages are:");
+        listOut.stream().forEach(s-> System.out.println(s));
+
+
+
     }
 
+    public List<String> processData(List<String> input) {
+        return processData(input, true);
+    }
 
-
-    public List<Order> processData(List<String> input) {
+    public List<String> processData(List<String> input, boolean showLogs) {
 
         queueBySide.put(BUY, sellQueue);
         queueBySide.put(SELL, buyQueue);
 
-
-        final Order NON_MATCHING = new Order(0, null, null, 0);
-
-        List<Order> listOrders = new ArrayList<>();
+        List<String> listOrders = new ArrayList<>();
         for (String order : input) {
             Order tmpOrder = new Order(order);
             if (tmpOrder.size <= 0) {
@@ -53,57 +65,53 @@ public class matchingEngine {
             long diff = tmpOrder.getSize() - (thatOrder == null ? 0 : thatOrder.getSize());
             if (thatOrder == null) {
                 // (1) no other side orders, outout no matching and add current order to current side queue
-                listOrders.add(NON_MATCHING);
+                listOrders.add(OUTPUT_NO_MATCHES);
                 ownSideList.add(tmpOrder);
             } else if (diff < 0) {
                 // (2) current order is smaller than other side
-                listOrders.add(tmpOrder);
+                listOrders.add(helperFormatOutput(tmpOrder));
                 thatOrder.minusSize(tmpOrder.getSize());
             } else if (diff == 0) {
-                listOrders.add(tmpOrder);
-                listOrders.add(thatOrder);
+                listOrders.add(helperFormatOutput(thatOrder, tmpOrder));
                 otherSideList.remove(thatOrder);
             } else {//TODO: to refactor this part to common method
                 // this.size >= thatOrder.size
                 // (3) go to loop and combine multiple orders together
+                List<Order> listMatchedOrders = new ArrayList<>();
                 long leftSize = tmpOrder.getSize();
                 while (!otherSideList.isEmpty()) {
                     thatOrder = otherSideList.get(0);
-                    if (leftSize == thatOrder.size) {
-                        // same
-                        listOrders.add(thatOrder);
-                        otherSideList.remove(thatOrder);
-                    } else if (leftSize < thatOrder.size) {
-                        listOrders.add(tmpOrder);
+                    if (leftSize < thatOrder.size) {
+                        listMatchedOrders.add(tmpOrder);
                         thatOrder.minusSize(leftSize);
+                        break;
                     } else {
-                        // still bigger
-                        listOrders.add(thatOrder);
+                        listMatchedOrders.add(thatOrder);
                         otherSideList.remove(thatOrder);
                         leftSize -= thatOrder.size;
+                        tmpOrder.setSize(leftSize);
                     }
                 }
-                if (leftSize > 0) {
+                if (leftSize == 0) {
+                    listMatchedOrders.add(tmpOrder);
+                } else {
                     // add residual and put into queue
                     tmpOrder.setSize(leftSize);
                     ownSideList.add(tmpOrder);
                 }
+                listOrders.add(helperFormatOutput(listMatchedOrders.toArray(new Order[0])));
             }
         }
-
-        System.out.println(">>>>>>End of Matching Engine process. Output of matched orders as:=====");
+        if (showLogs)
+            System.out.println(">>>>>>End of Matching Engine process. Output of matched orders as:=====");
         return listOrders;
     }
 
-
-    private List<String> helperFormatOutput(List<Order> listOutputOrders) {
-        return listOutputOrders.stream().map(o -> {
-            if (o.orderId > 0) {
-                return String.format(OUTPUT_MATCHED, o.orderId);
-            } else {
-                return String.format(OUTPUT_NO_MATCH, 0);
-            }
-        }).collect(Collectors.toList());
+    private String helperFormatOutput(Order... orders) {
+        if (orders == null || orders.length < 1) return "";
+        List<String> listIDs = Arrays.stream(orders).map(o -> "" + o.orderId).collect(Collectors.toList());
+        int n = orders.length;
+        return String.format(OUTPUT_MATCHES, n, String.join(",", listIDs));
     }
 
     private List<Order> helperOrderQueueBySide(final Order order, final boolean isReversed) {
@@ -148,7 +156,7 @@ public class matchingEngine {
 
         //TODO: to covert to UPPERCASE for input
         public Order(String input) {
-            List<String> values = Arrays.stream(input.split("\\s", 4)).filter(s -> !s.isEmpty()).map(s -> s.trim()).collect(Collectors.toList());
+            List<String> values = Arrays.stream(input.split("\\s", 4)).filter(s -> !s.isEmpty()).map(s -> s.trim().toUpperCase()).collect(Collectors.toList());
             if (values.size() < 4) {
                 throw new IllegalArgumentException("Incorrect input:" + input);
             }
@@ -200,39 +208,43 @@ public class matchingEngine {
         }
     }
 
-    private boolean sanityCheck(){
-        List<String> testResult=new ArrayList<String>(){{
+    private boolean sanityCheck() {
+        List<String> testResult = new ArrayList<String>() {{
             addAll(testCase1());
             addAll(testCase2());
             addAll(testCase3());
             addAll(testCase4());
+            addAll(testCase5());
+            addAll(testCase6());
+            addAll(testCase7());
         }};
-        if(testResult.size()>0){
+        if (testResult.size() > 0) {
             System.out.println("[INFO] Failures of tests:");
-            testResult.stream().forEach(s-> System.out.println(s));
+            testResult.stream().forEach(s -> System.out.println(s));
             return false;
         }
         return true;
     }
+
     private List<String> testCase1() {
         matchingEngine instance = new matchingEngine();
         List<String> input = new ArrayList<>();
         List<String> outputExpected = new ArrayList<>();
         input.add("101 APPL BUY 100");
-        outputExpected.add("0 no matching");
+        outputExpected.add(OUTPUT_NO_MATCHES);
         input.add("102 APPL BUY 200");
-        outputExpected.add("0 no matching");
+        outputExpected.add(OUTPUT_NO_MATCHES);
 
-        List<String> output = instance.helperFormatOutput(instance.processData(input));
+        List<String> output = instance.processData(input,false);
 
 //        output.stream().forEach(s-> System.out.println(s));
         if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
             return Collections.EMPTY_LIST;
-        else{
+        else {
             System.out.println("[INFO] test case 1 failed!");
-            return new ArrayList<String>(){{
-                addAll(output.stream().filter(s->!outputExpected.contains(s)).collect(Collectors.toList()));
-                addAll(outputExpected.stream().filter(s->!output.contains(s)).collect(Collectors.toList()));
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
             }};
         }
     }
@@ -242,22 +254,22 @@ public class matchingEngine {
         List<String> input = new ArrayList<>();
         List<String> outputExpected = new ArrayList<>();
         input.add("101 APPL BUY 100");
-        outputExpected.add("0 no matching");
+        outputExpected.add(OUTPUT_NO_MATCHES);
         input.add("102 APPL BUY 200");
-        outputExpected.add("0 no matching");
+        outputExpected.add(OUTPUT_NO_MATCHES);
         input.add("103 APPL SELL 50");
-        outputExpected.add("103 matched");
+        outputExpected.add("1 matches: 103");
 
-        List<String> output = instance.helperFormatOutput(instance.processData(input));
+        List<String> output = instance.processData(input,false);
 
 //        output.stream().forEach(s-> System.out.println(s));
         if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
             return Collections.EMPTY_LIST;
-        else{
+        else {
             System.out.println("[INFO] test case 2 failed!");
-            return new ArrayList<String>(){{
-                addAll(output.stream().filter(s->!outputExpected.contains(s)).collect(Collectors.toList()));
-                addAll(outputExpected.stream().filter(s->!output.contains(s)).collect(Collectors.toList()));
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
             }};
         }
     }
@@ -267,23 +279,23 @@ public class matchingEngine {
         List<String> input = new ArrayList<>();
         List<String> outputExpected = new ArrayList<>();
         input.add("101 APPL BUY 100");
-        outputExpected.add("0 no matching");
+        outputExpected.add(OUTPUT_NO_MATCHES);
         input.add("102 APPL BUY 200");
-        outputExpected.add("0 no matching");
+        outputExpected.add(OUTPUT_NO_MATCHES);
         input.add("103 APPL SELL 500");
-        outputExpected.add("101 matched");
-        outputExpected.add("102 matched");
+        outputExpected.add("2 matches: 101,102");
 
-        List<String> output = instance.helperFormatOutput(instance.processData(input));
+
+        List<String> output = instance.processData(input,false);
 
 //        output.stream().forEach(s-> System.out.println(s));
         if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
             return Collections.EMPTY_LIST;
-        else{
+        else {
             System.out.println("[INFO] test case 3 failed!");
-            return new ArrayList<String>(){{
-                addAll(output.stream().filter(s->!outputExpected.contains(s)).collect(Collectors.toList()));
-                addAll(outputExpected.stream().filter(s->!output.contains(s)).collect(Collectors.toList()));
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
             }};
         }
     }
@@ -293,36 +305,115 @@ public class matchingEngine {
         List<String> input = new ArrayList<>();
         List<String> outputExpected = new ArrayList<>();
         input.add("101 APPL BUY 100");
-        outputExpected.add("0 no matching");
+        outputExpected.add(OUTPUT_NO_MATCHES);
         input.add("102 APPL BUY 200");
-        outputExpected.add("0 no matching");
+        outputExpected.add(OUTPUT_NO_MATCHES);
         input.add("103 APPL SELL 400");
-        outputExpected.add("101 matched");
-        outputExpected.add("102 matched");
+        outputExpected.add("2 matches: 101,102");
         input.add("901 MSFT BUY 500");
-        outputExpected.add("0 no matching");
+        outputExpected.add(OUTPUT_NO_MATCHES);
         input.add("104 APPL BUY 300");
-        outputExpected.add("103 matched");
+        outputExpected.add("1 matches: 103");
         input.add("902 MSFT SELL 100");
-        outputExpected.add("902 matched");
+        outputExpected.add("1 matches: 902");
         input.add("105 APPL SELL 200");
-        outputExpected.add("104 matched");
-        outputExpected.add("105 matched");
+        outputExpected.add("2 matches: 104,105");
         input.add("903 MSFT SELL 400");
-        outputExpected.add("903 matched");
-        outputExpected.add("901 matched");
+        outputExpected.add("2 matches: 901,903");
 
-        List<String> output = instance.helperFormatOutput(instance.processData(input));
+
+        List<String> output = instance.processData(input,false);
 
 
 //        output.stream().forEach(s-> System.out.println(s));
         if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
             return Collections.EMPTY_LIST;
-        else{
+        else {
             System.out.println("[INFO] test case 4 failed!");
-            return new ArrayList<String>(){{
-                addAll(output.stream().filter(s->!outputExpected.contains(s)).collect(Collectors.toList()));
-                addAll(outputExpected.stream().filter(s->!output.contains(s)).collect(Collectors.toList()));
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
+            }};
+        }
+    }
+
+    private List<String>
+    testCase5() {
+        matchingEngine instance = new matchingEngine();
+        List<String> input = new ArrayList<>();
+        List<String> outputExpected = new ArrayList<>();
+        input.add("101 appl BUY 100");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("102 APPL buy 200");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("103 AppL SELL 300");
+        outputExpected.add("3 matches: 101,102,103");
+
+
+        List<String> output = instance.processData(input,false);
+
+//        output.stream().forEach(s-> System.out.println(s));
+        if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
+            return Collections.EMPTY_LIST;
+        else {
+            System.out.println("[INFO] test case 5 failed!");
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
+            }};
+        }
+    }
+
+    private List<String> testCase6() {
+        matchingEngine instance = new matchingEngine();
+        List<String> input = new ArrayList<>();
+        List<String> outputExpected = new ArrayList<>();
+        input.add("101 APPL BUY 100");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("102 APPL BUY 200");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("103 APPL SELL 250");
+        outputExpected.add("2 matches: 101,103");
+
+        List<String> output = instance.processData(input,false);
+
+//        output.stream().forEach(s-> System.out.println(s));
+        if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
+            return Collections.EMPTY_LIST;
+        else {
+            System.out.println("[INFO] test case 6 failed!");
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
+            }};
+        }
+    }
+
+    private List<String> testCase7() {
+        matchingEngine instance = new matchingEngine();
+        List<String> input = new ArrayList<>();
+        List<String> outputExpected = new ArrayList<>();
+        input.add("101 APPL BUY 100");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("102 APPL BUY 200");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("103 APPL SELL 400");
+        outputExpected.add("2 matches: 101,102");
+        input.add("104 APPL BUY 500");
+        outputExpected.add("1 matches: 103");
+        input.add("105 APPL SELL 400");
+        outputExpected.add("2 matches: 104,105");
+
+        List<String> output = instance.processData(input,false);
+
+//        output.stream().forEach(s-> System.out.println(s));
+        if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
+            return Collections.EMPTY_LIST;
+        else {
+            System.out.println("[INFO] test case 7 failed!");
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
             }};
         }
     }
