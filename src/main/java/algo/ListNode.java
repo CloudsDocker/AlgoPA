@@ -15,7 +15,8 @@ public class ListNode {
           ListNode node4 = new ListNode(4);
 
           node1.next=node2;
-          node2.next=node4;
+          node2.next=node3;
+          node3.next=node4;
           return node1;
       }
 
@@ -27,6 +28,11 @@ public class ListNode {
         node1.next=node3;
         node3.next=node4;
         return node1;
+    }
+
+    @Override
+    public String toString(){
+      return String.valueOf(this.val);
     }
   }
 
