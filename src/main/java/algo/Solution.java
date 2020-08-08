@@ -1,251 +1,432 @@
 package algo;
 
+
+import java.time.Clock;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.stream.Collectors;
+
+import static algo.Solution.Side.BUY;
+import static algo.Solution.Side.SELL;
 
 public class Solution {
-    public static final StatusCode E1 = new StatusCode(1, "E1", "Invalid Input Format");
-    public static final StatusCode E2 = new StatusCode(2, "E2", "Duplicate Pair");
-    public static final StatusCode E3 = new StatusCode(3, "E3", "Parent Has More than Two Children");
-    public static final StatusCode E4 = new StatusCode(4, "E4", "Multiple Roots");
-    public static final StatusCode E5 = new StatusCode(5, "E5", "Input Contains Cycle");
+    // Max number of orders can be queued, more new orders will be blocked until more space freed
+    final static int MAX_ORDER_DEPTH=10_000;
+    final static String OUTPUT_MATCHES = "%s matches: %s";
+    // pre define string constants for most frequent cases, purely for performance
+    final static String OUTPUT_NO_MATCHES = "0 matches:";
 
-    public static Node root;
-    static Set<StatusCode> setStatus = new TreeSet<>();
+    //TODO: replace list with blocking queue to provent system overstack
+    private Map<Product, Queue<Order>> buyQueue = new ConcurrentSkipListMap<Product, Queue<Order>>();
+    private Map<Product, Queue<Order>> sellQueue = new ConcurrentSkipListMap<Product, Queue<Order>>();
+    private Map<Side, Map<Product, Queue<Order>>> queueBySide = new HashMap<>();
 
-    public static void main(String args[]) throws Exception {
-        /* Enter your code here. Read input from STDIN. Print output to STDOUT */
+    public static void main(String[] args) {
+        Solution instance = new Solution();
+        System.out.println(">>>>>>Starting Matching Engine=====");
 
-        // get user input
+        if (instance.sanityCheck()) {
+            System.out.println("[DEBUG] All sanity test Passed, please enter your orders");
+        } else {
+            System.out.println("[ERROR] Sanity checks failure, please contact supprot");
+        }
+
+        List<String> input = new ArrayList<>();
         Scanner scanner = new Scanner(System.in);
-        String input = scanner.nextLine();
-//        String input="awecihjaw;elkifjhasz";
-//        String input="(U,P) (O,L) (A,S) (N,O) (S,T) (U,M) (A,N) (S,U) (L,D)"; // test case 6
-//        String input ="(A,B) (B,D) (B,C) (D,A)"; //test case 3
-//        String input="(A,B) (B,C)";//test case 28
-//        String input="(A,B)\t(B,C)\t(A,D)\t(D,E)";//test case 29
-//        String input="(A,B)\t(B,C)\t(A,D)\t(D,E)";//test case 29
-//        (A(S(T)(U(P)(M)))(N(O(L(D))))) test case 6
-        // (A(N(O(L(D))))(S(T)(U(M)(P)))) expected test case 6
-//
-
-// patch, for test 28, whose input is : input:[(A,B) (B,C)]
-// my output is (A(B(C))), but test case 28 expect "E1", I suspect it's a bug of test case, so I add this patch to make it pass
-        if(input.equals("(A,B) (B,C)")){
-            //        System.out.println("input:["+input+"]");
-//     char[] chars = input.toCharArray();
-//         for (char c:chars) {
-//             System.out.printf("%d ",(int)c);
-            System.out.print("E1");
-            System.exit(0);
-        }
-
-// String input = "(A,B) (B,D) (D,E) (A,C) (C,F) (E,G)"; //good case
-//        String input = " (B,D) (A,B) (A,C)"; //E1
-//        String input = "(A,B)    (A,C) (B, E) (B,F)"; //E1
-//        String input = "(B,D) (A,B) (B,D)"; //E2
-//        String input = "(B,D) (A,B) (B,D)"; //E2
-//        String input = "(B,D) (A,B) (A,C) (A,E)"; //E3
-//        String input = "(B,D) (A,B) (A,C) (E,F)"; //E4
-//        String input = "(A,B) (A,C) (B,D) (D,C)"; //E5
-
-        List<String> listNodes = new ArrayList<>();
-
-        if (validateInput(input, listNodes)) {
-            Map<String, Node> mapNodes = buildTree(listNodes);
-            validateTree(mapNodes);
-        }
-
-        if(setStatus.size()>0){
-            outputError();
-        }else{
-            StringBuffer sbOut = new StringBuffer();
-            outputTree(root, sbOut);
-            System.out.print(sbOut.toString());
-        }
-    }
-
-    private static void outputError() {
-        if (setStatus.size() > 0) {
-            StatusCode statusCode = setStatus.iterator().next();
-            System.out.printf("%s", statusCode.errorCode);
-            // System.exit(statusCode.priority);
-        }
-    }
-
-
-    private static boolean validateInput(String input, List<String> listNodes) {
-        //fail fast
-        if (input == null || input.isEmpty()) {
-            setStatus.add(E1);
-            return false;
-        }
-
-        Matcher matcher = Pattern.compile("^\\([A-Z],[A-Z]\\)( \\([A-Z],[A-Z]\\))*$").matcher(input);
-        if (!matcher.matches()) {
-            setStatus.add(E1);
-            return false;
-        }
-
-        Scanner scanner = new Scanner(input).useDelimiter(" ");
         while (scanner.hasNext()) {
-            String item = scanner.next();
-            if (listNodes.contains(item)) {
-                setStatus.add(E2);
-                return false;
+            input.add(scanner.nextLine());
+        }
+        List<String> listOut= instance.processData(input);
+        System.out.println("Output messages are:");
+        listOut.stream().forEach(s-> System.out.println(s));
+
+
+
+    }
+
+    // proxy method
+    public List<String> processData(List<String> input) {
+        return processData(input, true);
+    }
+
+    /**
+     *
+     * @param input: List of strings represent orders
+     * @param showLogs : true: verbose mode
+     * @return: List of messages after matching
+     */
+    public List<String> processData(List<String> input, boolean showLogs) {
+
+        queueBySide.put(BUY, sellQueue);
+        queueBySide.put(SELL, buyQueue);
+
+        List<String> listOrders = new ArrayList<>();
+        for (String order : input) {
+            Order tmpOrder = new Order(order);
+            if (tmpOrder.size <= 0) {
+                if(showLogs)
+                    System.out.println("[DEBUG] skip zero order: " + tmpOrder);
+                continue;
             }
-            listNodes.add(item);
-        }
-        return true;
 
-    }
+            Queue<Order> ownSideList = helperOrderQueueBySide(tmpOrder, false);
+            Queue<Order> otherSideList = helperOrderQueueBySide(tmpOrder, true);
 
-    // A binary tree node
-    static class Node {
-        String data;
-        Node left, right, parent;
-
-        public Node(String data) {
-            this.data = data;
-            parent = left = right = null;
-        }
-
-        @Override
-        public String toString() {
-            return "Node's data=" + data;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            Node node = (Node) o;
-            return Objects.equals(data, node.data);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(data);
-        }
-    }
-
-
-    private static Map<String, Node> buildTree(List<String> list) {
-        Collections.sort(list);
-        // node value to node object map
-        Map<String, Node> mapNodes = new HashMap<>();
-        for (String item:list) {
-            createNode(item, mapNodes);
-        }
-        return mapNodes;
-    }
-
-    private static void validateTree(Map<String, Node> mapNodes) {
-        //go to find root of the tree, raise Error E4 if there are more than one root
-        for (Node tmpNode : mapNodes.values()) {
-            if (tmpNode.parent == null) {
-                if (root == null) {
-                    // here is the 1st 'root' found, so assume it's a good root
-                    root = tmpNode;
-                } else {
-                    // found more than one 'root'
-                    setStatus.add(E4);
+            Order thatOrder = otherSideList.size() > 0 ? otherSideList.peek() : null;
+            long diff = tmpOrder.getSize() - (thatOrder == null ? 0 : thatOrder.getSize());
+            if (thatOrder == null) {
+                // (1) no other side orders, outout no matching and add current order to current side queue
+                listOrders.add(OUTPUT_NO_MATCHES);
+                ownSideList.add(tmpOrder);
+            } else if (diff < 0) {
+                // (2) current order is smaller than other side
+                listOrders.add(helperFormatOutput(tmpOrder));
+                thatOrder.minusSize(tmpOrder.getSize());
+            } else if (diff == 0) {
+                listOrders.add(helperFormatOutput(thatOrder, tmpOrder));
+                otherSideList.poll();
+            } else {//TODO: to refactor this part to common method
+                // this.size >= thatOrder.size
+                // (3) go to loop and combine multiple orders together
+                List<Order> listMatchedOrders = new ArrayList<>();
+                long leftSize = tmpOrder.getSize();
+                while (!otherSideList.isEmpty()) {
+                    thatOrder = otherSideList.peek();
+                    if (leftSize < thatOrder.size) {
+                        listMatchedOrders.add(tmpOrder);
+                        thatOrder.minusSize(leftSize);
+                        break;
+                    } else {
+                        listMatchedOrders.add(thatOrder);
+                        otherSideList.poll();
+                        leftSize -= thatOrder.size;
+                        tmpOrder.setSize(leftSize);
+                    }
                 }
+                if (leftSize == 0) {
+                    listMatchedOrders.add(tmpOrder);
+                } else {
+                    // add residual and put into queue
+                    tmpOrder.setSize(leftSize);
+                    ownSideList.add(tmpOrder);
+                }
+                listOrders.add(helperFormatOutput(listMatchedOrders.toArray(new Order[0])));
             }
         }
-        if(root==null){
-            setStatus.add(E5);
+        if (showLogs)
+            System.out.println(">>>>>>End of Matching Engine process. Output of matched orders as:=====");
+        return listOrders;
+    }
+
+    private String helperFormatOutput(Order... orders) {
+        if (orders == null || orders.length < 1) return "";
+        List<String> listIDs = Arrays.stream(orders).map(o -> "" + o.orderId).collect(Collectors.toList());
+        int n = orders.length;
+        return String.format(OUTPUT_MATCHES, n, String.join(",", listIDs));
+    }
+
+    private Queue<Order> helperOrderQueueBySide(final Order order, final boolean isReversed) {
+        //TODO: to use array of Map
+        Map<Product, Queue<Order>> tmpQueue;
+        switch (order.side) {
+            case BUY:
+                tmpQueue = isReversed ? sellQueue : buyQueue;
+                break;
+            case SELL:
+                tmpQueue = isReversed ? buyQueue : sellQueue;
+                break;
+            default:
+                throw new IllegalStateException("Unexpected SIDE: " + order.side);
+        }
+        if (!tmpQueue.containsKey(order.product)) {
+            tmpQueue.put(order.product, new ArrayBlockingQueue<Order>(MAX_ORDER_DEPTH, true));
+        }
+        return tmpQueue.get(order.product);
+    }
+
+    public enum Product {
+        APPL(1), MSFT(2);
+
+        Product(int i) {
         }
     }
 
-    private static void createNode(String pair, Map<String, Node> mapNodes) {
-        String parent, child;
+    enum Side {
+        BUY(1), SELL(2);
 
-        String[] items = pair.replaceAll("\\)", "").replaceAll("\\(", "").split(",");
-        parent = items[0];
-        child = items[1];
-
-        // check whether the node was created before
-        // due to the requirement : the sequence of paris is not ordered
-        Node nodeParent = null, nodeChild = null;
-        if (!mapNodes.containsKey(parent)) {
-            mapNodes.put(parent, new Node(parent));
-        }
-        nodeParent = mapNodes.get(parent);
-
-        if (!mapNodes.containsKey(child)) {
-            mapNodes.put(child, new Node(child));
-        }
-        nodeChild = mapNodes.get(child);
-
-        if (nodeParent.left == null) {
-            nodeParent.left = nodeChild;
-
-        } else {
-            // left is not null, check right
-            if (nodeParent.right == null) {
-                // parent has left child already, so this child is right
-                nodeParent.right = nodeChild;
-            } else {
-                // parent has both left and right children already, error
-                setStatus.add(E3);
-            }
-        }
-
-        if (nodeChild.parent == null) {
-            nodeChild.parent = nodeParent;
-        } else {
-            // this child has parent already, further check it's Error #5
-            if (nodeChild.parent != nodeParent) {
-                setStatus.add(E5);
-            }
+        Side(int i) {
         }
     }
 
+    class Order implements Comparable {
+        private final long orderId;
+        private final Product product;
+        private final Solution.Side side;
+        private final Clock createTime;
+        private long size;
 
-    private static void outputTree(Node curr, StringBuffer sb) {
-        //use DFS to traverse this tree, inOrder
-        if(curr!=null){
-            sb.append("(");
-            sb.append(curr.data);
-            if (curr.left != null) {
-                outputTree(curr.left, sb);
+        //TODO: to covert to UPPERCASE for input
+        public Order(String input) {
+            List<String> values = Arrays.stream(input.split("\\s", 4)).filter(s -> !s.isEmpty()).map(s -> s.trim().toUpperCase()).collect(Collectors.toList());
+            if (values.size() < 4) {
+                throw new IllegalArgumentException("Incorrect input:" + input);
             }
-            if (curr.right != null) {
-                outputTree(curr.right, sb);
-            }
-            sb.append(")");
+            this.orderId = Long.valueOf(values.get(0));
+            this.product = Product.valueOf(values.get(1));
+            this.side = Solution.Side.valueOf(values.get(2));
+            this.size = Long.valueOf(values.get(3));
+            this.createTime = Clock.systemUTC();
+
         }
-    }
 
-    static class StatusCode implements Comparable<StatusCode> {
-        private int priority;
-        private String errorCode;
-        private String errorMessage;
+        public Order(long orderId, Product product, Solution.Side side, long size) {
+            this.orderId = orderId;
+            this.product = product;
+            this.side = side;
+            this.createTime = Clock.systemUTC();
+            this.size = size;
+        }
 
-        public StatusCode(int priority, String errorCode, String errorMessage) {
-            this.priority = priority;
-            this.errorCode = errorCode;
-            this.errorMessage = errorMessage;
+
+        public long getSize() {
+            return size;
+        }
+
+        public void setSize(long size) {
+            this.size = size;
+        }
+
+        public long minusSize(long size) {
+            this.size -= size;
+            return this.size;
         }
 
         @Override
-        public int compareTo(StatusCode i) {
-            // output errors per priority,
-            return  this.priority - i.priority;
+        public int compareTo(Object o) {
+            Order that = (Order) o;
+            return this.createTime.instant().compareTo(that.createTime.instant());
         }
 
         @Override
         public String toString() {
-            return "StatusCode{" +
-                    "priority=" + priority +
-                    ", errorCode='" + errorCode + '\'' +
-                    ", errorMessage='" + errorMessage + '\'' +
+            return "Order{" +
+                    "orderId=" + orderId +
+                    ", product=" + product +
+                    ", side=" + side +
+                    ", createTime=" + createTime +
+                    ", size=" + size +
                     '}';
         }
-
     }
 
+    private boolean sanityCheck() {
+        List<String> testResult = new ArrayList<String>() {{
+            addAll(testCase1());
+            addAll(testCase2());
+            addAll(testCase3());
+            addAll(testCase4());
+            addAll(testCase5());
+            addAll(testCase6());
+            addAll(testCase7());
+        }};
+        if (testResult.size() > 0) {
+            System.out.println("[INFO] Failures of tests:");
+            testResult.stream().forEach(s -> System.out.println(s));
+            return false;
+        }
+        return true;
+    }
 
+    private List<String> testCase1() {
+        Solution instance = new Solution();
+        List<String> input = new ArrayList<>();
+        List<String> outputExpected = new ArrayList<>();
+        input.add("101 APPL BUY 100");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("102 APPL BUY 200");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+
+        List<String> output = instance.processData(input,false);
+
+//        output.stream().forEach(s-> System.out.println(s));
+        if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
+            return Collections.EMPTY_LIST;
+        else {
+            System.out.println("[INFO] test case 1 failed!");
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
+            }};
+        }
+    }
+
+    private List<String> testCase2() {
+        Solution instance = new Solution();
+        List<String> input = new ArrayList<>();
+        List<String> outputExpected = new ArrayList<>();
+        input.add("101 APPL BUY 100");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("102 APPL BUY 200");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("103 APPL SELL 50");
+        outputExpected.add("1 matches: 103");
+
+        List<String> output = instance.processData(input,false);
+
+//        output.stream().forEach(s-> System.out.println(s));
+        if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
+            return Collections.EMPTY_LIST;
+        else {
+            System.out.println("[INFO] test case 2 failed!");
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
+            }};
+        }
+    }
+
+    private List<String> testCase3() {
+        Solution instance = new Solution();
+        List<String> input = new ArrayList<>();
+        List<String> outputExpected = new ArrayList<>();
+        input.add("101 APPL BUY 100");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("102 APPL BUY 200");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("103 APPL SELL 500");
+        outputExpected.add("2 matches: 101,102");
+
+
+        List<String> output = instance.processData(input,false);
+
+//        output.stream().forEach(s-> System.out.println(s));
+        if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
+            return Collections.EMPTY_LIST;
+        else {
+            System.out.println("[INFO] test case 3 failed!");
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
+            }};
+        }
+    }
+
+    private List<String> testCase4() {
+        Solution instance = new Solution();
+        List<String> input = new ArrayList<>();
+        List<String> outputExpected = new ArrayList<>();
+        input.add("101 APPL BUY 100");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("102 APPL BUY 200");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("103 APPL SELL 400");
+        outputExpected.add("2 matches: 101,102");
+        input.add("901 MSFT BUY 500");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("104 APPL BUY 300");
+        outputExpected.add("1 matches: 103");
+        input.add("902 MSFT SELL 100");
+        outputExpected.add("1 matches: 902");
+        input.add("105 APPL SELL 200");
+        outputExpected.add("2 matches: 104,105");
+        input.add("903 MSFT SELL 400");
+        outputExpected.add("2 matches: 901,903");
+
+
+        List<String> output = instance.processData(input,false);
+
+
+//        output.stream().forEach(s-> System.out.println(s));
+        if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
+            return Collections.EMPTY_LIST;
+        else {
+            System.out.println("[INFO] test case 4 failed!");
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
+            }};
+        }
+    }
+
+    private List<String>
+    testCase5() {
+        Solution instance = new Solution();
+        List<String> input = new ArrayList<>();
+        List<String> outputExpected = new ArrayList<>();
+        input.add("101 appl BUY 100");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("102 APPL buy 200");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("103 AppL SELL 300");
+        outputExpected.add("3 matches: 101,102,103");
+
+
+        List<String> output = instance.processData(input,false);
+
+//        output.stream().forEach(s-> System.out.println(s));
+        if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
+            return Collections.EMPTY_LIST;
+        else {
+            System.out.println("[INFO] test case 5 failed!");
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
+            }};
+        }
+    }
+
+    private List<String> testCase6() {
+        Solution instance = new Solution();
+        List<String> input = new ArrayList<>();
+        List<String> outputExpected = new ArrayList<>();
+        input.add("101 APPL BUY 100");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("102 APPL BUY 200");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("103 APPL SELL 250");
+        outputExpected.add("2 matches: 101,103");
+
+        List<String> output = instance.processData(input,false);
+
+//        output.stream().forEach(s-> System.out.println(s));
+        if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
+            return Collections.EMPTY_LIST;
+        else {
+            System.out.println("[INFO] test case 6 failed!");
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
+            }};
+        }
+    }
+
+    private List<String> testCase7() {
+        Solution instance = new Solution();
+        List<String> input = new ArrayList<>();
+        List<String> outputExpected = new ArrayList<>();
+        input.add("101 APPL BUY 100");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("102 APPL BUY 200");
+        outputExpected.add(OUTPUT_NO_MATCHES);
+        input.add("103 APPL SELL 400");
+        outputExpected.add("2 matches: 101,102");
+        input.add("104 APPL BUY 500");
+        outputExpected.add("1 matches: 103");
+        input.add("105 APPL SELL 400");
+        outputExpected.add("2 matches: 104,105");
+
+        List<String> output = instance.processData(input,false);
+
+//        output.stream().forEach(s-> System.out.println(s));
+        if (output.containsAll(outputExpected) && outputExpected.containsAll(output))
+            return Collections.EMPTY_LIST;
+        else {
+            System.out.println("[INFO] test case 7 failed!");
+            return new ArrayList<String>() {{
+                addAll(output.stream().filter(s -> !outputExpected.contains(s)).collect(Collectors.toList()));
+                addAll(outputExpected.stream().filter(s -> !output.contains(s)).collect(Collectors.toList()));
+            }};
+        }
+    }
 }

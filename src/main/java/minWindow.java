@@ -1,4 +1,4 @@
-class Solution {
+class minWindow {
     public String minWindow(String s, String t) {
         // for 'substring' problem, use sliding window
         // key concepts for sliding window are
@@ -28,7 +28,7 @@ class Solution {
             end++; // move end point to right
             map[c1]--; // reduce count of char, if not exist, it will be negative
             
-            while(counter==t.length()){
+            while(count==t.length()){
                 // counter is zero means current window is still valid
                 if(minLen>(end-start+1)){
                     minLen=(end-start+1);

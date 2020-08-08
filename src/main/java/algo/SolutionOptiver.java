@@ -4,7 +4,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Solution {
+public class SolutionOptiver {
     public static final StatusCode E1 = new StatusCode(1, "E1", "Invalid Input Format");
     public static final StatusCode E2 = new StatusCode(2, "E2", "Duplicate Pair");
     public static final StatusCode E3 = new StatusCode(3, "E3", "Parent Has More than Two Children");
