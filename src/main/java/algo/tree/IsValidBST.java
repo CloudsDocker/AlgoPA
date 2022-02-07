@@ -1,8 +1,8 @@
-package algo;
+package algo.tree;
 
 import java.util.Stack;
 
-import static algo.TreePrinter.printTree;
+import static algo.tree.TreePrinter.printTree;
 
 public class IsValidBST {
     public static void main(String[] args) {

@@ -1,4 +1,4 @@
-package algo;
+package algo.tree;
 
 import java.util.LinkedList;
 import java.util.Queue;

@@ -1,5 +1,7 @@
-package algo;
+package algo.tree;
 
+
+import algo.Pair;
 
 import java.util.*;
 

@@ -1,8 +1,8 @@
-package algo;
+package algo.tree;
 
 import java.util.Stack;
 
-public class IsSymmetric {
+public class IsTreeSymmetric {
 
     public boolean isSymmetric(TreeNode root) {
         return root==null || isSymmetricHelp(root.left, root.right);

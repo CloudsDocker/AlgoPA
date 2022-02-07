@@ -1,6 +1,6 @@
-package algo;
+package algo.tree;
 
-public class MaxPathSum {
+public class BSTMaxPathSum {
     /*
     124. Binary Tree Maximum Path Sum
 Hard

@@ -1,7 +1,8 @@
-package algo;
+package algo.tree;
 
-import static algo.TreeNode.buildBSTTree;
-import static algo.TreeNode.buildTree;
+
+import static algo.tree.TreeNode.buildBSTTree;
+import static algo.tree.TreeNode.buildTree;
 
 public class TreeBinaryTreeIsBST {
     public static void main(String[] args) {

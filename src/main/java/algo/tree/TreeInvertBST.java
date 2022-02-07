@@ -1,10 +1,16 @@
-package algo;
+package algo.tree;
+
+import static algo.tree.TreePrinter.printTree;
 
 public class TreeInvertBST {
     public static void main(String[] args) {
         System.out.printf("===start===");
-        TreeNode root = invertTree(TreeNode.buildBSTTree());
-        System.out.printf("invert tree: "+ root);
+        System.out.println("current tree is:");
+        final TreeNode tree = TreeNode.buildBSTTree();
+        printTree(tree);
+        TreeNode root = invertTree(tree);
+        System.out.println("invert tree: ");
+        printTree(tree);
     }
 
     static TreeNode invertTree(TreeNode root){
@@ -14,4 +20,5 @@ public class TreeInvertBST {
         root.right=invertTree(tmpLeft);
         return root;
     }
+
 }

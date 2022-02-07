@@ -1,4 +1,4 @@
-package algo;
+package algo.tree;
 
 public class TreeIsSameTree {
     public static void main(String[] args) {

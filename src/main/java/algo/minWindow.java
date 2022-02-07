@@ -1,6 +1,6 @@
 package algo;
 
-public class MinWindow {
+public class minWindow {
     /*
 76. Minimum Window Substring
 Hard
