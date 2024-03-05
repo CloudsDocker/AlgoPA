@@ -35,7 +35,7 @@ Output: 3
 Explanation: It could be decoded as "BZ" (2 26), "VF" (22 6), or "BBF" (2 2 6).
          */
         DecodeWays inst = new DecodeWays();
-        System.out.println(" decode ways: "+ inst.numDecodings("12"));
+        System.out.println(" decode ways: "+ inst.numDecodings("1234"));
 
     }
 

@@ -3,7 +3,12 @@ package algo;
 import java.util.Arrays;
 
 class CoinChanges {
-    public int coinChange(int[] coins, int amount) {
+    public static void main(String[] args) {
+        int amount = 12;
+        int[] coins = new int[]{1,2,5};
+        System.out.println("get coin change for "+amount+" is "+coinChange(coins,amount));
+    }
+    public static int coinChange(int[] coins, int amount) {
         // this is one DP problem, so create matrix for number of fewest numbers of coins to form the
         int[] dp = new int[amount+1]; // index of array is the amount to be calculated
         Arrays.fill(dp,amount+1); // fill DP with *invalid* value so we can update it to valid one late
