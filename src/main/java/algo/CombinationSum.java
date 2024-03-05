@@ -5,12 +5,12 @@ import java.util.*;
 public class CombinationSum {
     public static void main(String[] args) {
 
-//        int[] candidates = new int[]{10, 1, 2, 7, 6, 1, 5};
-        int[] candidates = new int[]{ 2, 3, 6, 7};
+        int[] candidates = new int[]{10, 1, 2, 7, 6, 1, 5};
+//        int[] candidates = new int[]{ 2, 3, 6, 7};
         System.out.println("combination sum is : "+findCombination(candidates,7));
-
-
     }
+    // back
+
 
     public static Set<List<Integer>> findCombination(int[] candidates, int target){
         Set<List<Integer>> results=new HashSet<>();
@@ -27,10 +27,11 @@ public class CombinationSum {
         }else if(target<0){
             return;
         }else {
-            // iterate candiate to combine to sum
+            // iterate candidate to combine to sum
             for (int i = start; i < candidates.length; i++) {
             // add current number to 'current list'
                 current.add(candidates[i]);
+                // the value of 2nd parameter here is key: either "i" or "i+1" indicate the next starting point
                 findCombinationBackTracking(candidates,i,target-candidates[i],current,results);
 //                current.remove(candidates[i]);
                 current.remove(current.size()-1);
